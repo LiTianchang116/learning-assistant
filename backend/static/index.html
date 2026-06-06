@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>诗语 - 全能学习助手</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4/dist/browser/index.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#333;background:#fff;height:100vh;overflow:hidden;display:flex}
+
+/* Sidebar */
+.sidebar{width:260px;min-width:260px;background:#fafafa;border-right:1px solid #f0f0f0;display:flex;flex-direction:column;height:100vh;transition:width .3s,min-width .3s;overflow:hidden}
+.sidebar.collapsed{width:0;min-width:0;border:none}
+.sidebar.collapsed *{visibility:hidden}
+.sidebar-toggle{position:fixed;left:8px;top:12px;z-index:100;width:32px;height:32px;border-radius:8px;border:1px solid #e8e8e8;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:#666;transition:left .3s}
+.sidebar:not(.collapsed)~.sidebar-toggle{left:268px}
+
+/* Chat container */
+.chat-wrap{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* Messages area */
+.messages{flex:1;overflow-y:auto;padding:24px 0 120px}
+.msg{max-width:780px;margin:0 auto;padding:12px 24px;display:flex;gap:12px}
+.msg.user{flex-direction:row-reverse}
+.msg .avatar{width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px}
+.msg.user .avatar{background:#333;color:#fff}
+.msg.assistant .avatar{background:#e8e8e8;color:#666}
+.msg .bubble{max-width:75%;font-size:14px;line-height:1.7;word-break:break-word}
+.msg.user .bubble{background:#333;color:#fff;border-radius:18px 18px 4px 18px;padding:12px 16px}
+.msg.assistant .bubble{background:#f5f5f5;color:#333;border-radius:18px 18px 18px 4px;padding:12px 16px;max-width:720px}
+.msg .bubble img{max-width:100%;border-radius:8px}
+.msg .bubble a{color:#1890ff;text-decoration:underline}
+.msg .bubble pre{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;overflow-x:auto;font-size:13px;margin:8px 0}
+.msg .bubble code{background:#f0f0f0;padding:2px 5px;border-radius:4px;font-size:13px}
+
+/* Welcome */
+.welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px}
+.welcome.hidden{display:none}
+
+/* Input area */
+.input-area{position:fixed;bottom:0;left:260px;right:0;padding:16px 24px 20px;background:linear-gradient(transparent,#fff 20px)}
+.input-area.collapsed-left{left:0}
+.input-box{max-width:780px;margin:0 auto;background:#fff;border:1px solid #e0e0e0;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.06);transition:box-shadow .2s}
+.input-box:focus-within{box-shadow:0 4px 32px rgba(0,0,0,.12);border-color:#ccc}
+.input-box textarea{width:100%;border:none;outline:none;resize:none;font-size:15px;padding:14px 16px 6px;background:transparent;font-family:inherit;line-height:1.5}
+.input-bar{display:flex;gap:4px;padding:4px 12px 10px;align-items:center;flex-wrap:wrap}
+.input-bar .feat-btn{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;border:1px solid #e8e8e8;background:#fff;font-size:12px;color:#666;cursor:pointer;transition:all .15s}
+.input-bar .feat-btn:hover{background:#f5f5f5;border-color:#d0d0d0}
+.input-bar .feat-btn.active{background:#333;color:#fff;border-color:#333}
+.send-btn{width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#d0d0d0;color:#fff;margin-left:auto;transition:background .15s}
+.send-btn.active{background:#333}
+
+/* Feature panels in chat */
+.wf-table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
+.wf-table th,.wf-table td{padding:6px 10px;text-align:left;border-bottom:1px solid #eee}
+.wf-table th{background:#fafafa;font-weight:600}
+.wf-table tr:hover{background:#fafafa}
+
+.lp-stage{border-left:3px solid #1890ff;padding:8px 0 8px 14px;margin:8px 0;position:relative}
+.lp-stage::before{content:'';position:absolute;left:-7px;top:12px;width:10px;height:10px;border-radius:50%;background:#1890ff}
+
+/* Mindmap container in chat */
+.mm-chat-container{width:680px;min-width:680px;min-height:350px;background:#fafafa;border-radius:8px;overflow:hidden;margin:8px 0}
+.mm-chat-container .markmap{width:100%;height:350px}
+
+/* Upload zone */
+.upload-zone{border:2px dashed #e0e0e0;border-radius:12px;padding:16px;text-align:center;cursor:pointer;margin:8px 0;transition:border-color .2s}
+.upload-zone:hover{border-color:#aaa}
+.upload-zone i{font-size:24px;color:#ccc;display:block;margin-bottom:6px}
+.upload-zone p{font-size:13px;color:#999}
+
+/* Sidebar items */
+.sidebar .logo-area{padding:16px;display:flex;align-items:center;gap:10px}
+.sidebar .logo-area img{width:32px;height:32px;border-radius:8px}
+.sidebar .logo-area span{font-size:16px;font-weight:700}
+.new-chat-btn{margin:8px 12px;padding:10px;border:1px solid #e0e0e0;border-radius:10px;text-align:center;cursor:pointer;font-size:13px;color:#666;transition:all .15s}
+.new-chat-btn:hover{background:#f0f0f0}
+.conv-group-label{font-size:12px;color:#999;padding:12px 16px 4px}
+.conv-item{padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-radius:8px;margin:2px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-item:hover{background:#f0f0f0}
+.conv-item.active{background:#e8e8e8;color:#333}
+
+@media print{.no-print{display:none!important}}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="logo-area">
+    <img src="/static/logo.png" alt="诗语">
+    <span>诗语</span>
+  </div>
+  <div class="new-chat-btn" onclick="newChat()"><i class="fas fa-plus mr-2"></i>新建对话</div>
+  <div style="flex:1;overflow-y:auto">
+    <div class="conv-group-label">对话历史</div>
+    <div id="convList"></div>
+  </div>
+</div>
+
+<!-- Sidebar toggle button -->
+<div class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+  <i class="fas fa-bars"></i>
+</div>
+
+<!-- Chat area -->
+<div class="chat-wrap">
+  <!-- Welcome -->
+  <div class="welcome" id="welcomeView">
+    <img src="/static/logo.png" alt="诗语" style="width:64px;height:64px;border-radius:16px;margin-bottom:16px">
+    <h1 style="font-size:24px;font-weight:700;margin-bottom:8px">你好，我是诗语</h1>
+    <p style="color:#999">你的全能学习助手，可以对话、修改文档、分析词汇、生成思维导图和规划学习路径</p>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages" id="messages"></div>
+</div>
+
+<!-- Input area -->
+<div class="input-area" id="inputArea">
+  <div class="input-box">
+    <textarea id="chatInput" rows="1" placeholder="向诗语提问..." oninput="autoResize(this);updateSendBtn()"></textarea>
+    <div class="input-bar">
+      <button class="feat-btn" onclick="triggerUpload()" title="上传文件"><i class="fas fa-plus"></i></button>
+      <button class="feat-btn" id="btnFormat" onclick="toggleFeature('format')"><i class="fas fa-star" style="color:#f5a623"></i> 格式修改</button>
+      <button class="feat-btn" id="btnWordfreq" onclick="toggleFeature('wordfreq')"><i class="fas fa-chart-bar" style="color:#4a90d9"></i> 词频分析</button>
+      <button class="feat-btn" id="btnMindmap" onclick="toggleFeature('mindmap')"><i class="fas fa-project-diagram" style="color:#7b61ff"></i> 思维导图</button>
+      <button class="feat-btn" id="btnLearning" onclick="toggleFeature('learning')"><i class="fas fa-graduation-cap" style="color:#52c41a"></i> 学习路径</button>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()"><i class="fas fa-arrow-up"></i></button>
+    </div>
+  </div>
+  <input type="file" id="fileInput" multiple accept=".docx,.pdf,.txt" style="display:none" onchange="handleFileUpload(this.files)">
+</div>
+
+<script>
+const API = '';
+const sessionId = localStorage.getItem('sessionId') || (() => { const id = crypto.randomUUID(); localStorage.setItem('sessionId', id); return id; })();
+
+// Check markmap globals after scripts load
+window.addEventListener('load', () => {
+  console.log('[markmap] markmapLib:', typeof window.markmapLib, 'markmap:', typeof window.markmap);
+});
+
+// State
+let currentFeature = null;
+let messages = [];
+let currentConvId = null;
+let formatFilePaths = [];
+let formatFiles = [];
+let wfData = [];
+let mmMarkdown = '';
+let pendingFiles = [];
+
+// ========== CONVERSATION HISTORY ==========
+function loadConversations() {
+  try { return JSON.parse(localStorage.getItem('conversations') || '[]'); } catch(e) { return []; }
+}
+function saveConversations(convs) {
+  localStorage.setItem('conversations', JSON.stringify(convs));
+}
+function loadConvMessages(convId) {
+  try { return JSON.parse(localStorage.getItem('conv_' + convId) || '[]'); } catch(e) { return []; }
+}
+function saveConvMessages(convId, msgs) {
+  localStorage.setItem('conv_' + convId, JSON.stringify(msgs));
+}
+
+function startNewConv() {
+  currentConvId = 'conv_' + Date.now();
+  messages = [];
+  formatFilePaths = [];
+  formatFiles = [];
+  wfData = [];
+  mmMarkdown = '';
+  pendingFiles = [];
+  currentFeature = null;
+  ['btnFormat','btnWordfreq','btnMindmap','btnLearning'].forEach(id => document.getElementById(id).classList.remove('active'));
+  renderMessages();
+  renderConvList();
+}
+
+function switchConversation(convId) {
+  // Save current first
+  if (currentConvId && messages.length > 0) {
+    saveConvMessages(currentConvId, messages);
+    updateConvInList(currentConvId);
+  }
+  currentConvId = convId;
+  messages = loadConvMessages(convId);
+  formatFilePaths = [];
+  currentFeature = null;
+  ['btnFormat','btnWordfreq','btnMindmap','btnLearning'].forEach(id => document.getElementById(id).classList.remove('active'));
+  renderMessages();
+  renderConvList();
+}
+
+function updateConvInList(convId) {
+  const convs = loadConversations();
+  const idx = convs.findIndex(c => c.id === convId);
+  if (idx >= 0) {
+    const msgs = loadConvMessages(convId);
+    if (msgs.length > 0) {
+      const last = msgs[msgs.length - 1];
+      convs[idx].preview = (last.content || '').replace(/<[^>]*>/g, '').substring(0, 40);
+      convs[idx].time = last.time || Date.now();
+    }
+    saveConversations(convs);
+  }
+}
+
+function saveCurrentToHistory() {
+  if (!currentConvId || messages.length === 0) return;
+  saveConvMessages(currentConvId, messages);
+  const convs = loadConversations();
+  const idx = convs.findIndex(c => c.id === currentConvId);
+  const last = messages[messages.length - 1];
+  const preview = (last.content || '').replace(/<[^>]*>/g, '').substring(0, 40);
+  const entry = { id: currentConvId, preview, time: last.time || Date.now() };
+  if (idx >= 0) convs[idx] = entry;
+  else convs.unshift(entry);
+  // Keep last 20 conversations
+  saveConversations(convs.slice(0, 20));
+  renderConvList();
+}
+
+function renderConvList() {
+  const list = document.getElementById('convList');
+  const convs = loadConversations();
+  if (convs.length === 0) {
+    list.innerHTML = '<div style="padding:8px 16px;font-size:12px;color:#ccc">暂无对话</div>';
+    return;
+  }
+  let html = '';
+  // Group by today / earlier
+  const today = new Date().toDateString();
+  const todayConvs = [];
+  const earlierConvs = [];
+  convs.forEach(c => {
+    if (new Date(c.time).toDateString() === today) todayConvs.push(c);
+    else earlierConvs.push(c);
+  });
+  if (todayConvs.length) {
+    html += '<div class="conv-group-label">今天</div>';
+    todayConvs.forEach(c => { html += convItemHtml(c); });
+  }
+  if (earlierConvs.length) {
+    html += '<div class="conv-group-label">更早</div>';
+    earlierConvs.forEach(c => { html += convItemHtml(c); });
+  }
+  list.innerHTML = html;
+}
+
+function convItemHtml(c) {
+  const active = c.id === currentConvId ? ' active' : '';
+  return '<div class="conv-item' + active + '" onclick="switchConversation(\'' + c.id + '\')">' +
+    escapeHtml(c.preview || '新对话') +
+    '<br><span style="font-size:11px;color:#bbb">' + formatTime(c.time) + '</span></div>';
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const today = new Date().toDateString();
+  if (d.toDateString() === today) return d.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+  return d.toLocaleDateString('zh-CN', {month:'numeric',day:'numeric'}) + ' ' + d.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+}
+
+// ========== SIDEBAR ==========
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const toggle = document.getElementById('sidebarToggle');
+  const input = document.getElementById('inputArea');
+  sb.classList.toggle('collapsed');
+  const collapsed = sb.classList.contains('collapsed');
+  toggle.innerHTML = collapsed ? '<i class="fas fa-bars"></i>' : '<i class="fas fa-times"></i>';
+  input.classList.toggle('collapsed-left', collapsed);
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function updateSendBtn() {
+  const btn = document.getElementById('sendBtn');
+  const input = document.getElementById('chatInput');
+  btn.classList.toggle('active', input.value.trim().length > 0);
+}
+
+function toggleFeature(feat) {
+  const btns = ['btnFormat','btnWordfreq','btnMindmap','btnLearning'];
+  const featMap = {format:'btnFormat',wordfreq:'btnWordfreq',mindmap:'btnMindmap',learning:'btnLearning'};
+  if (currentFeature === feat) {
+    currentFeature = null;
+    document.getElementById(featMap[feat]).classList.remove('active');
+  } else {
+    btns.forEach(id => document.getElementById(id).classList.remove('active'));
+    currentFeature = feat;
+    document.getElementById(featMap[feat]).classList.add('active');
+  }
+}
+
+function triggerUpload() { document.getElementById('fileInput').click(); }
+
+function handleFileUpload(files) {
+  if (!files.length) return;
+  pendingFiles = Array.from(files);
+  const names = pendingFiles.map(f => f.name).join(', ');
+  addMsg('user', '上传文件: ' + names);
+  if (pendingFiles.every(f => f.name.endsWith('.docx'))) {
+    if (!currentFeature) { currentFeature = 'format'; document.getElementById('btnFormat').classList.add('active'); }
+    uploadFormatFiles(pendingFiles);
+  } else if (pendingFiles.some(f => f.name.match(/\.(pdf|txt|docx)$/))) {
+    if (!currentFeature) { currentFeature = 'wordfreq'; document.getElementById('btnWordfreq').classList.add('active'); }
+    if (currentFeature === 'wordfreq') analyzeWordFreq(pendingFiles);
+    else if (currentFeature === 'mindmap') uploadMindmapFile(pendingFiles[0]);
+    else uploadFormatFiles(pendingFiles);
+  }
+  document.getElementById('fileInput').value = '';
+}
+
+// ========== MESSAGES ==========
+function addMsg(role, content) {
+  if (!currentConvId) startNewConv();
+  messages.push({ role, content, time: Date.now() });
+  saveCurrentToHistory();
+  renderMessages();
+}
+
+function addMsgHtml(role, html) {
+  if (!currentConvId) startNewConv();
+  messages.push({ role, content: html, time: Date.now(), isHtml: true });
+  saveCurrentToHistory();
+  renderMessages();
+}
+
+function updateLastAssistant(html) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') {
+      messages[i].content = html;
+      messages[i].isHtml = true;
+      break;
+    }
+  }
+  saveCurrentToHistory();
+  // Only update the last assistant bubble, don't re-render all messages
+  const bubbles = document.querySelectorAll('.msg.assistant .bubble');
+  if (bubbles.length > 0) {
+    bubbles[bubbles.length - 1].innerHTML = html;
+  }
+}
+
+function renderMessages() {
+  const el = document.getElementById('messages');
+  const welcome = document.getElementById('welcomeView');
+  if (messages.length === 0) {
+    welcome.style.display = '';
+    el.innerHTML = '';
+    return;
+  }
+  welcome.style.display = 'none';
+  let html = '';
+  messages.forEach((m, idx) => {
+    const cls = m.role === 'user' ? 'user' : 'assistant';
+    const avatar = m.role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+    const body = m.isHtml ? m.content : escapeHtml(m.content);
+    html += '<div class="msg ' + cls + '"><div class="avatar">' + avatar + '</div><div class="bubble">' + body + '</div></div>';
+  });
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ========== SEND ==========
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  autoResize(input);
+  updateSendBtn();
+
+  addMsg('user', text);
+
+  let feature = currentFeature;
+  if (!feature) {
+    if (text.includes('格式') || text.includes('字体') || text.includes('字号') || text.includes('加粗') || text.includes('对齐') || text.includes('边距') || text.includes('行距') || text.includes('字间距')) feature = 'format';
+    else if (text.includes('词频') || text.includes('单词') || text.includes('词汇')) feature = 'wordfreq';
+    else if (text.includes('思维导图') || text.includes('导图') || text.includes('脑图')) feature = 'mindmap';
+    else if (text.includes('学习路径') || text.includes('学习计划') || text.includes('怎么学')) feature = 'learning';
+  }
+
+  if (feature === 'format') sendFormatChat(text);
+  else if (feature === 'wordfreq') {
+    if (pendingFiles.length) { analyzeWordFreq(pendingFiles); pendingFiles = []; }
+    else addMsgHtml('assistant', '<i class="fas fa-info-circle" style="color:#4a90d9"></i> 请先上传 .docx / .pdf / .txt 文件');
+  } else if (feature === 'mindmap') sendMindmapText(text);
+  else if (feature === 'learning') sendLearningPath(text);
+  else sendGeneralChat(text);
+}
+
+// ========== GENERAL CHAT ==========
+function sendGeneralChat(text) {
+  addMsgHtml('assistant', '<i class="fas fa-spinner fa-spin"></i> 思考中...');
+  const form = new FormData();
+  form.append('message', text);
+  form.append('session_id', sessionId);
+  fetch(API + '/api/chat/send', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) throw new Error('请求失败'); return r.json(); })
+    .then(data => { updateLastAssistant(escapeHtml(data.reply || '无回复')); })
+    .catch(e => { updateLastAssistant('<span style="color:red">错误: ' + e.message + '</span>'); });
+}
+
+// ========== FORMAT ==========
+function uploadFormatFiles(files) {
+  const form = new FormData();
+  formatFiles = Array.from(files);
+  formatFiles.forEach(f => form.append('files', f));
+  fetch(API + '/api/format/upload', { method: 'POST', body: form })
+    .then(r => r.json())
+    .then(data => {
+      formatFilePaths = data.files.map(f => f.path);
+      addMsgHtml('assistant', '<i class="fas fa-check-circle" style="color:#52c41a"></i> 已加载 ' + formatFiles.length + ' 个文件: ' + formatFiles.map(f=>f.name).join(', '));
+    })
+    .catch(e => addMsgHtml('assistant', '<span style="color:red">上传失败: ' + e.message + '</span>'));
+}
+
+function sendFormatChat(text) {
+  if (formatFilePaths.length === 0) {
+    addMsgHtml('assistant', '<i class="fas fa-info-circle" style="color:#f5a623"></i> 请先上传 .docx 文件');
+    return;
+  }
+  addMsgHtml('assistant', '<i class="fas fa-spinner fa-spin"></i> 正在处理文档...');
+  const form = new FormData();
+  formatFilePaths.forEach(p => form.append('file_paths', p));
+  form.append('message', text);
+  form.append('session_id', sessionId);
+  fetch(API + '/api/format/modify', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || '请求失败') }); return r.json(); })
+    .then(data => {
+      let html = '';
+      for (const [name, summary] of Object.entries(data.summaries || {})) {
+        html += '<div style="margin:4px 0"><strong>' + escapeHtml(name) + ':</strong> ' + escapeHtml(summary) + '</div>';
+      }
+      if (data.download_path) {
+        html += '<div style="margin-top:8px"><a href="' + API + '/api/format/download/' + encodeURIComponent(data.filename) + '" download style="color:#1890ff"><i class="fas fa-download"></i> 下载修改后的文件</a></div>';
+      }
+      updateLastAssistant(html || '修改完成');
+    })
+    .catch(e => { updateLastAssistant('<span style="color:red">错误: ' + e.message + '</span>'); });
+}
+
+// ========== WORD FREQ ==========
+function analyzeWordFreq(files) {
+  const form = new FormData();
+  Array.from(files).forEach(f => form.append('files', f));
+  form.append('use_stopwords', 'true');
+  form.append('min_freq', '1');
+  addMsgHtml('assistant', '<i class="fas fa-spinner fa-spin"></i> 正在分析词频...');
+  fetch(API + '/api/wordfreq/analyze', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || '请求失败') }); return r.json(); })
+    .then(data => {
+      wfData = data.words;
+      let html = '<div style="margin-bottom:8px"><strong>词频分析完成</strong>，共 ' + data.total_unique + ' 个高频词</div>';
+      html += '<div style="max-height:300px;overflow:auto"><table class="wf-table"><thead><tr><th>排名</th><th>单词</th><th>次数</th><th>频率</th></tr></thead><tbody>';
+      wfData.slice(0, 50).forEach((w, i) => {
+        html += '<tr><td>' + (i+1) + '</td><td>' + w.word + '</td><td>' + w.count + '</td><td>' + w.frequency.toFixed(2) + '%</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      if (wfData.length > 50) html += '<div style="font-size:12px;color:#999;margin-top:4px">仅显示前50个</div>';
+      html += '<div style="margin-top:8px"><button onclick="exportExcel()" style="padding:6px 14px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px"><i class="fas fa-download mr-1"></i>导出 Excel</button></div>';
+      updateLastAssistant(html);
+    })
+    .catch(e => { updateLastAssistant('<span style="color:red">错误: ' + e.message + '</span>'); });
+}
+
+function exportExcel() {
+  const form = new FormData();
+  form.append('words', JSON.stringify(wfData));
+  fetch(API + '/api/wordfreq/export', { method: 'POST', body: form })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'wordfreq_result.xlsx'; a.click();
+      URL.revokeObjectURL(url);
+    });
+}
+
+// ========== MINDMAP ==========
+function sendMindmapText(text) {
+  addMsgHtml('assistant', '<i class="fas fa-spinner fa-spin"></i> 正在生成思维导图...');
+  const form = new FormData();
+  form.append('text', text);
+  form.append('session_id', sessionId);
+  fetch(API + '/api/mindmap/generate', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || '请求失败') }); return r.json(); })
+    .then(data => {
+      let md = data.markdown || '';
+      if (md.startsWith('```')) md = md.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '');
+      mmMarkdown = md;
+      renderMindmapInChat(md);
+    })
+    .catch(e => { updateLastAssistant('<span style="color:red">生成失败: ' + e.message + '</span>'); });
+}
+
+function uploadMindmapFile(file) {
+  addMsgHtml('assistant', '<i class="fas fa-spinner fa-spin"></i> 正在分析文件...');
+  const form = new FormData();
+  form.append('file', file);
+  form.append('session_id', sessionId);
+  fetch(API + '/api/mindmap/generate', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || '请求失败') }); return r.json(); })
+    .then(data => {
+      let md = data.markdown || '';
+      if (md.startsWith('```')) md = md.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '');
+      mmMarkdown = md;
+      renderMindmapInChat(md);
+    })
+    .catch(e => { updateLastAssistant('<span style="color:red">生成失败: ' + e.message + '</span>'); });
+}
+
+function renderMindmapInChat(md) {
+  const id = 'mm_' + Date.now();
+  let html = '<div style="margin-bottom:8px"><strong>思维导图已生成</strong></div>';
+  html += '<div class="mm-chat-container" id="' + id + '">';
+  html += '<div style="padding:40px;text-align:center;color:#999"><i class="fas fa-spinner fa-spin"></i> 渲染中...</div>';
+  html += '</div>';
+  html += '<div style="margin-top:8px;display:flex;gap:8px">';
+  html += '<button onclick="exportMindmapSVG(\'' + id + '\')" style="padding:6px 14px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px"><i class="fas fa-download mr-1"></i>SVG</button>';
+  html += '<button onclick="exportMindmapPNG(\'' + id + '\')" style="padding:6px 14px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px"><i class="fas fa-download mr-1"></i>PNG</button>';
+  html += '</div>';
+  updateLastAssistant(html);
+
+  const container = document.getElementById(id);
+  console.log('[mindmap] id:', id, 'container:', container, 'md length:', md.length);
+  if (!container) { console.error('[mindmap] container not found!'); return; }
+  console.log('[mindmap] calling renderMarkmapDOM, markmapLib:', !!window.markmapLib, 'markmap:', !!window.markmap);
+  renderMarkmapDOM(container, md);
+}
+
+// Simple markdown heading parser — replaces markmap-lib's Transformer
+// markmap-view expects nodes with: { type, depth, content, children, payload }
+function parseMarkdownToTree(md) {
+  const lines = md.split('\n');
+  const root = { type: 'root', depth: 0, content: '', children: [], payload: {} };
+  const stack = [{ node: root, level: 0 }];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const match = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (match) {
+      const level = match[1].length;
+      const title = match[2].replace(/\*\*/g, '').trim();
+      const node = { type: 'heading', depth: level, content: title, children: [], payload: {} };
+
+      while (stack.length > 1 && stack[stack.length - 1].level >= level) {
+        stack.pop();
+      }
+      stack[stack.length - 1].node.children.push(node);
+      stack.push({ node, level });
+    }
+  }
+
+  // If root has no content, promote the first child to root
+  if (!root.content && root.children.length > 0) {
+    const first = root.children[0];
+    root.content = first.content;
+    root.children = first.children.concat(root.children.slice(1));
+  }
+
+  return root;
+}
+
+function renderMarkmapDOM(container, md, retries) {
+  retries = retries || 0;
+  if (!window.markmap) {
+    if (retries < 20) {
+      setTimeout(() => renderMarkmapDOM(container, md, retries + 1), 500);
+      return;
+    }
+    container.innerHTML = '<div style="padding:20px;color:#999;text-align:center">思维导图组件加载失败（markmap-view 未加载）</div>';
+    return;
+  }
+  try {
+    const { Markmap } = window.markmap;
+
+    // Use Transformer if markmap-lib loaded, otherwise use custom parser
+    let root;
+    if (window.markmapLib && window.markmapLib.Transformer) {
+      const { Transformer } = window.markmapLib;
+      const transformer = new Transformer();
+      const result = transformer.transform(md);
+      root = result.root;
+      console.log('[markmap] used Transformer');
+    } else {
+      root = parseMarkdownToTree(md);
+      console.log('[markmap] used custom parser');
+    }
+    console.log('[markmap] root:', root.content, 'children:', root.children.length);
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const w = container.clientWidth || 800;
+    const h = container.clientHeight || 350;
+    svg.setAttribute('width', w);
+    svg.setAttribute('height', h);
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    container.innerHTML = '';
+    container.appendChild(svg);
+    svg.getBoundingClientRect();
+
+    const mm = Markmap.create(svg);
+    mm.setData(root);
+    setTimeout(() => mm.fit(), 500);
+    console.log('[markmap] rendered, svg:', w, 'x', h);
+  } catch(e) {
+    console.error('[markmap] render error:', e);
+    container.innerHTML = '<div style="padding:20px;color:#999;text-align:center">渲染失败: ' + e.message + '</div>';
+  }
+}
+
+function exportMindmapSVG(id) {
+  const container = document.getElementById(id);
+  if (!container) return;
+  const svg = container.querySelector('svg');
+  if (!svg) { alert('请等待导图渲染完成'); return; }
+  const data = new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([data], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'mindmap.svg'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportMindmapPNG(id) {
+  const container = document.getElementById(id);
+  if (!container) return;
+  const svg = container.querySelector('svg');
+  if (!svg) { alert('请等待导图渲染完成'); return; }
+  const data = new XMLSerializer().serializeToString(svg);
+  const scale = window.devicePixelRatio || 2;
+  const rect = svg.getBoundingClientRect();
+  const canvas = document.createElement('canvas');
+  canvas.width = rect.width * scale;
+  canvas.height = rect.height * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const img = new Image();
+  img.onload = () => {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.drawImage(img, 0, 0, rect.width, rect.height);
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'mindmap.png'; a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(data)));
+}
+
+// ========== LEARNING PATH ==========
+function sendLearningPath(text) {
+  addMsgHtml('assistant', '<i class="fas fa-spinner fa-spin"></i> 正在规划学习路径...');
+  const form = new FormData();
+  form.append('subject', text);
+  form.append('level', '');
+  form.append('goal', '');
+  form.append('time_available', '');
+  form.append('session_id', sessionId);
+  fetch(API + '/api/learning/generate', { method: 'POST', body: form })
+    .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || '请求失败') }); return r.json(); })
+    .then(data => {
+      if (data.error) { updateLastAssistant('<span style="color:red">' + escapeHtml(data.error) + '</span>'); return; }
+      renderLearningInChat(data.stages || []);
+    })
+    .catch(e => { updateLastAssistant('<span style="color:red">错误: ' + e.message + '</span>'); });
+}
+
+function renderLearningInChat(stages) {
+  if (!stages.length) { updateLastAssistant('未能生成学习路径，请重试'); return; }
+  const colors = ['#1890ff','#52c41a','#fa8c16','#722ed1','#eb2f96','#13c2c2'];
+  let html = '<div style="margin-bottom:10px"><strong>学习路径规划</strong></div>';
+  stages.forEach((s, i) => {
+    const c = colors[i % colors.length];
+    html += '<div class="lp-stage" style="border-color:' + c + '">';
+    html += '<div style="font-weight:600;color:' + c + ';margin-bottom:4px">阶段 ' + (i+1) + ': ' + escapeHtml(s.title) + '</div>';
+    if (s.duration) html += '<div style="font-size:12px;color:#999;margin-bottom:4px"><i class="fas fa-clock"></i> ' + escapeHtml(s.duration) + '</div>';
+    if (s.description) html += '<div style="font-size:13px;margin-bottom:4px">' + escapeHtml(s.description) + '</div>';
+    if (s.resources && s.resources.length) {
+      html += '<div style="font-size:12px;color:#666"><strong>推荐资源:</strong></div><ul style="font-size:12px;color:#666;margin:2px 0 0 16px">';
+      s.resources.forEach(r => html += '<li>' + escapeHtml(r) + '</li>');
+      html += '</ul>';
+    }
+    html += '</div>';
+  });
+  html += '<div style="margin-top:8px"><button onclick="exportLearningPDF()" style="padding:6px 14px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px"><i class="fas fa-file-pdf mr-1"></i>导出 PDF</button></div>';
+  updateLastAssistant(html);
+}
+
+function exportLearningPDF() {
+  const bubbles = document.querySelectorAll('.msg.assistant .bubble');
+  const lastBubble = bubbles[bubbles.length - 1];
+  if (!lastBubble) return;
+  const win = window.open('', '_blank');
+  win.document.write('<html><head><title>学习路径</title><style>body{font-family:sans-serif;padding:40px;color:#333}.lp-stage{border-left:3px solid #1890ff;padding:8px 0 8px 14px;margin:8px 0}ul{margin:4px 0 0 16px}</style></head><body>' + lastBubble.innerHTML + '</body></html>');
+  win.document.close();
+  setTimeout(() => win.print(), 300);
+}
+
+// ========== INIT ==========
+function newChat() { startNewConv(); }
+
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// Load last conversation or show welcome
+const convs = loadConversations();
+if (convs.length > 0) {
+  switchConversation(convs[0].id);
+} else {
+  startNewConv();
+}
+</script>
+</body>
+</html>
